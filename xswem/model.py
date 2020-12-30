@@ -1,5 +1,7 @@
 import tensorflow as tf
 import pandas as pd
+import seaborn as sns
+from matplotlib import pyplot as plt
 from xswem.utils import assert_layers_built
 
 
@@ -93,3 +95,12 @@ class XSWEM(tf.keras.Model):
             return pd.DataFrame(embedding_weights, index=self.get_vocab_ordered_by_key())
         else:
             return embedding_weights
+
+    def global_plot_embedding_histogram(self):
+        """ Plots a histogram of the flattened embedding weights """
+        embedding_weights_flat = self.get_embedding_weights(return_df=False).flatten()
+        ax = sns.histplot(embedding_weights_flat)
+        ax.set_title("Histogram for Learned Word Embeddings")
+        ax.set_xlabel("Embedding Component Value")
+        ax.set_ylabel("Frequency")
+        plt.show()

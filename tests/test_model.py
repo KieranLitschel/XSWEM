@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from xswem.model import XSWEM
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 
 class TestXSWEM(tf.test.TestCase):
@@ -93,6 +93,18 @@ class TestXSWEM(tf.test.TestCase):
         embedding_weights = self.model.get_embedding_weights(return_df=False)
         self.assertIsInstance(embedding_weights, np.ndarray)
         np.testing.assert_array_equal(embedding_weights, self.embedding_weights[0])
+
+    def test_global_plot_embedding_histogram(self):
+        with patch('matplotlib.pyplot.show', new_callable=Mock) as mock_show:
+            with patch('seaborn.histplot', new_callable=Mock) as mock_histplot:
+                self.model.global_plot_embedding_histogram()
+                expected_data = self.embedding_weights[0].flatten()
+                mock_histplot.assert_called_once()
+                np.testing.assert_array_equal(mock_histplot.call_args.args[0], expected_data)
+                mock_histplot.return_value.set_title.assert_called_once_with("Histogram for Learned Word Embeddings")
+                mock_histplot.return_value.set_xlabel.assert_called_once_with("Embedding Component Value")
+                mock_histplot.return_value.set_ylabel.assert_called_once_with("Frequency")
+                mock_show.assert_called_once()
 
 
 if __name__ == '__main__':
