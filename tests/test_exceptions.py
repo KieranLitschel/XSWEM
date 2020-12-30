@@ -1,6 +1,6 @@
 import unittest
 from xswem.exceptions import XSWEMException, UninitializedWeightsException, \
-    DEFAULT_UNINITIALIZED_WEIGHTS_EXCEPTION_MESSAGE
+    _DEFAULT_UNINITIALIZED_WEIGHTS_EXCEPTION_MESSAGE
 
 
 class TestExceptions(unittest.TestCase):
@@ -14,7 +14,7 @@ class TestExceptions(unittest.TestCase):
 
     def test_UninitializedWeightsException(self):
         exception = UninitializedWeightsException()
-        self.assertEqual(str(exception), DEFAULT_UNINITIALIZED_WEIGHTS_EXCEPTION_MESSAGE)
+        self.assertEqual(str(exception), _DEFAULT_UNINITIALIZED_WEIGHTS_EXCEPTION_MESSAGE)
         exception = UninitializedWeightsException(self.test_message)
         self.assertEqual(str(exception), self.test_message)
 

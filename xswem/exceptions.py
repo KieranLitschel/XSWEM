@@ -1,4 +1,4 @@
-DEFAULT_UNINITIALIZED_WEIGHTS_EXCEPTION_MESSAGE = "Model weights are not initialised. Train the model before calling " \
+_DEFAULT_UNINITIALIZED_WEIGHTS_EXCEPTION_MESSAGE = "Model weights are not initialised. Train the model before calling " \
                                                 "an explain method."
 
 
@@ -16,5 +16,5 @@ class UninitializedWeightsException(XSWEMException):
     """ Raised when a method requires the model weights to be initialized but they are uninitialized. """
 
     def __init__(self, message=None):
-        message = message or DEFAULT_UNINITIALIZED_WEIGHTS_EXCEPTION_MESSAGE
+        message = message or _DEFAULT_UNINITIALIZED_WEIGHTS_EXCEPTION_MESSAGE
         super(UninitializedWeightsException, self).__init__(message)
