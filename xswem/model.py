@@ -1,29 +1,30 @@
 import tensorflow as tf
+import pandas as pd
+from xswem.utils import assert_layers_built
 
 
 class XSWEM(tf.keras.Model):
 
     def __init__(self, embedding_size, output_activation, vocab_map, output_map, mask_zero=False, dropout_rate=None,
                  output_regularizer=None, **kwargs):
-        """
-        Model class for XSWEM.
+        """ Model class for XSWEM.
 
-        Attributes
-        ----------
-        embedding_size : int
-            Number of components in each embedding vector.
-        output_activation : tf.keras.activations
-            Activation function to use in the output layer.
-        vocab_map : dict
-            Map of int to str. Describes the word corresponding to each int in the input.
-        output_map : dict
-            Map of int to str. Describes each output unit in English.
-        mask_zero : bool
-            Whether or not the input value 0 is a special "padding" value that should be masked out.
-        dropout_rate : float
-            Dropout rate of the input to the output layer. Default of None, meaning no dropout.
-        output_regularizer : tf.keras.regularizers.Regularizer
-            Regularizer for the output layer. Default of None, meaning no regularization.
+            Parameters
+            ----------
+            embedding_size : int
+                Number of components in each embedding vector.
+            output_activation : tf.keras.activations
+                Activation function to use in the output layer.
+            vocab_map : dict
+                Map of int to str. Describes the word corresponding to each int in the input.
+            output_map : dict
+                Map of int to str. Describes each output unit in English.
+            mask_zero : bool
+                Whether or not the input value 0 is a special "padding" value that should be masked out.
+            dropout_rate : float
+                Dropout rate of the input to the output layer. Default of None, meaning no dropout.
+            output_regularizer : tf.keras.regularizers.Regularizer
+                Regularizer for the output layer. Default of None, meaning no regularization.
         """
         super(XSWEM, self).__init__(**kwargs)
         self._embedding_size = embedding_size
@@ -59,3 +60,36 @@ class XSWEM(tf.keras.Model):
             'dropout_rate': self._dropout_rate,
             'output_regularizer': self._output_regularizer,
         }, **self._kwargs}
+
+    def get_vocab_ordered_by_key(self):
+        """ Gets the vocabulary for the embeddings ordered by key.
+
+            Returns
+            -------
+            list
+                The words in the vocabulary sorted in ascending order by key.
+        """
+        return [self._vocab_map[i] for i in sorted(self._vocab_map.keys())]
+
+    @assert_layers_built
+    def get_embedding_weights(self, return_df=None):
+        """ Gets the embedding weights for the model.
+
+            Parameters
+            ----------
+            return_df : bool
+                Whether to return the results as a pandas DataFrame. Default of True. If false then results are returned
+                as a numpy array.
+
+            Returns
+            -------
+            pd.DataFrame or np.array
+                If return_df, then returns a DataFrame of the embedding weights with the embeddings labelled with their
+                corresponding words. Otherwise returns a numpy array of the embeddings weights.
+        """
+        return_df = return_df if return_df is not None else True
+        embedding_weights = self.embedding_layer.weights[0].numpy()
+        if return_df:
+            return pd.DataFrame(embedding_weights, index=self.get_vocab_ordered_by_key())
+        else:
+            return embedding_weights

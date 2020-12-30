@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 from xswem.model import XSWEM
 from unittest.mock import patch
 
@@ -79,6 +80,19 @@ class TestXSWEM(tf.test.TestCase):
             expected_dropout_test_sentence_prediction = 0.99998
             self.assertAlmostEqual(dropout_test_sentence_prediction, expected_dropout_test_sentence_prediction,
                                    places=5)
+
+    def test_get_vocab_ordered_by_key(self):
+        self.assertEqual(self.model.get_vocab_ordered_by_key(), ["UNK", "hello", "world"])
+
+    def test_get_embedding_weights(self):
+        embedding_weights = self.model.get_embedding_weights()
+        self.assertIsInstance(embedding_weights, pd.DataFrame)
+        self.assertEqual(list(embedding_weights.columns), [0, 1])
+        self.assertEqual(list(embedding_weights.index), ["UNK", "hello", "world"])
+        np.testing.assert_array_equal(embedding_weights.to_numpy(), self.embedding_weights[0])
+        embedding_weights = self.model.get_embedding_weights(return_df=False)
+        self.assertIsInstance(embedding_weights, np.ndarray)
+        np.testing.assert_array_equal(embedding_weights, self.embedding_weights[0])
 
 
 if __name__ == '__main__':
