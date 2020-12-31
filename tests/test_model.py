@@ -100,7 +100,7 @@ class TestXSWEM(tf.test.TestCase):
                 self.model.global_plot_embedding_histogram()
                 expected_data = self.embedding_weights[0].flatten()
                 mock_histplot.assert_called_once()
-                np.testing.assert_array_equal(mock_histplot.call_args.args[0], expected_data)
+                np.testing.assert_array_equal(mock_histplot.call_args[0][0], expected_data)
                 mock_histplot.return_value.set_title.assert_called_once_with("Histogram for Learned Word Embeddings")
                 mock_histplot.return_value.set_xlabel.assert_called_once_with("Embedding Component Value")
                 mock_histplot.return_value.set_ylabel.assert_called_once_with("Frequency")
