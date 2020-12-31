@@ -85,14 +85,14 @@ class TestXSWEM(tf.test.TestCase):
         self.assertEqual(self.model.get_vocab_ordered_by_key(), ["UNK", "hello", "world"])
 
     def test_get_embedding_weights(self):
-        embedding_weights = self.model.get_embedding_weights()
-        self.assertIsInstance(embedding_weights, pd.DataFrame)
-        self.assertEqual(list(embedding_weights.columns), [0, 1])
-        self.assertEqual(list(embedding_weights.index), ["UNK", "hello", "world"])
-        np.testing.assert_array_equal(embedding_weights.to_numpy(), self.embedding_weights[0])
-        embedding_weights = self.model.get_embedding_weights(return_df=False)
-        self.assertIsInstance(embedding_weights, np.ndarray)
-        np.testing.assert_array_equal(embedding_weights, self.embedding_weights[0])
+        pd_embedding_weights = self.model.get_embedding_weights()
+        expected_pd_embedding_weights = pd.DataFrame(self.embedding_weights[0], columns=pd.Index([0, 1]),
+                                                     index=pd.Index(["UNK", "hello", "world"]))
+        self.assertIsInstance(pd_embedding_weights, pd.DataFrame)
+        pd.testing.assert_frame_equal(pd_embedding_weights, expected_pd_embedding_weights)
+        np_embedding_weights = self.model.get_embedding_weights(return_df=False)
+        self.assertIsInstance(np_embedding_weights, np.ndarray)
+        np.testing.assert_array_equal(np_embedding_weights, self.embedding_weights[0])
 
     def test_global_plot_embedding_histogram(self):
         with patch('matplotlib.pyplot.show', new_callable=Mock) as mock_show:
@@ -105,6 +105,14 @@ class TestXSWEM(tf.test.TestCase):
                 mock_histplot.return_value.set_xlabel.assert_called_once_with("Embedding Component Value")
                 mock_histplot.return_value.set_ylabel.assert_called_once_with("Frequency")
                 mock_show.assert_called_once()
+
+    def test_global_explain_embedding_components(self):
+        explained_components = self.model.global_explain_embedding_components(2)
+        expected_explained_components = pd.DataFrame(np.array([["world", "UNK"], ["hello", "hello"]]),
+                                                     index=pd.Index([1, 2], name="Word Rank"),
+                                                     columns=pd.Index([0, 1], dtype=object))
+        self.assertIsInstance(explained_components, pd.DataFrame)
+        pd.testing.assert_frame_equal(explained_components, expected_explained_components)
 
 
 if __name__ == '__main__':
