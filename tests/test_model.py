@@ -1,7 +1,8 @@
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 from xswem.model import XSWEM
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 
 class TestXSWEM(tf.test.TestCase):
@@ -81,6 +82,39 @@ class TestXSWEM(tf.test.TestCase):
             expected_dropout_test_sentence_prediction = 0.99988
             self.assertAlmostEqual(dropout_test_sentence_prediction, expected_dropout_test_sentence_prediction,
                                    places=5)
+
+    def test_get_vocab_ordered_by_key(self):
+        self.assertEqual(self.model.get_vocab_ordered_by_key(), ["UNK", "hello", "world"])
+
+    def test_get_embedding_weights(self):
+        pd_embedding_weights = self.model.get_embedding_weights()
+        expected_pd_embedding_weights = pd.DataFrame(self.embedding_weights[0], columns=pd.Index([0, 1]),
+                                                     index=pd.Index(["UNK", "hello", "world"]))
+        self.assertIsInstance(pd_embedding_weights, pd.DataFrame)
+        pd.testing.assert_frame_equal(pd_embedding_weights, expected_pd_embedding_weights)
+        np_embedding_weights = self.model.get_embedding_weights(return_df=False)
+        self.assertIsInstance(np_embedding_weights, np.ndarray)
+        np.testing.assert_array_equal(np_embedding_weights, self.embedding_weights[0])
+
+    def test_global_plot_embedding_histogram(self):
+        with patch('matplotlib.pyplot.show', new_callable=Mock) as mock_show:
+            with patch('seaborn.histplot', new_callable=Mock) as mock_histplot:
+                self.model.global_plot_embedding_histogram()
+                expected_data = self.embedding_weights[0].flatten()
+                mock_histplot.assert_called_once()
+                np.testing.assert_array_equal(mock_histplot.call_args[0][0], expected_data)
+                mock_histplot.return_value.set_title.assert_called_once_with("Histogram for Learned Word Embeddings")
+                mock_histplot.return_value.set_xlabel.assert_called_once_with("Embedding Component Value")
+                mock_histplot.return_value.set_ylabel.assert_called_once_with("Frequency")
+                mock_show.assert_called_once()
+
+    def test_global_explain_embedding_components(self):
+        explained_components = self.model.global_explain_embedding_components(2)
+        expected_explained_components = pd.DataFrame(np.array([["world", "UNK"], ["hello", "hello"]]),
+                                                     index=pd.Index([1, 2], name="Word Rank"),
+                                                     columns=pd.Index([0, 1], dtype=object))
+        self.assertIsInstance(explained_components, pd.DataFrame)
+        pd.testing.assert_frame_equal(explained_components, expected_explained_components)
 
 
 if __name__ == '__main__':
