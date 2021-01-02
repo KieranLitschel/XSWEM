@@ -36,17 +36,17 @@ class XSWEM(tf.keras.Model):
         self._kwargs = kwargs
         self.embedding_layer = tf.keras.layers.Embedding(len(self._vocab_map), self._embedding_size,
                                                          mask_zero=self._mask_zero, name="Embedding")
-        self.max_pool_layer = tf.keras.layers.GlobalMaxPool1D(name="MaxPool")
         if self._dropout_rate:
             self.dropout_layer = tf.keras.layers.Dropout(self._dropout_rate, name="Dropout")
+        self.max_pool_layer = tf.keras.layers.GlobalMaxPool1D(name="MaxPool")
         self.output_layer = tf.keras.layers.Dense(len(self._output_map), activation=self._output_activation,
                                                   kernel_regularizer=self._output_regularizer, name="Output")
 
     def call(self, inputs, training=None, mask=None):
         x = self.embedding_layer(inputs)
-        x = self.max_pool_layer(x)
         if self._dropout_rate:
             x = self.dropout_layer(x, training=training)
+        x = self.max_pool_layer(x)
         return self.output_layer(x)
 
     def get_config(self):
