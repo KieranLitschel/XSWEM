@@ -49,14 +49,15 @@ class TestXSWEM(tf.test.TestCase):
         self.assertAlmostEqual(test_sentence_prediction, self.expected_test_sentence_prediction, places=5)
 
     def test_dropout(self):
-        # mock the dropout call so that if we're training with dropout we always dropout the second unit of the
-        # embedding layer
+        # mock the dropout call so that if we're training with dropout we always dropout the same components
         def mock_dropout_call(*args, **kwargs):
             training = kwargs['training']
             if training:
-                return tf.convert_to_tensor([[3, 0]], dtype=tf.float32)
+                return tf.convert_to_tensor([[[2, 0],
+                                            [0, -3]]], dtype=tf.float32)
             else:
-                return tf.convert_to_tensor([[3, -2]], dtype=tf.float32)
+                return tf.convert_to_tensor([[[2, -2],
+                                            [3, -3]]], dtype=tf.float32)
 
         with patch('tensorflow.keras.layers.Dropout.__call__', mock_dropout_call):
 
@@ -65,8 +66,8 @@ class TestXSWEM(tf.test.TestCase):
 
             # model architecture
             self.assertIsInstance(model.layers[0], tf.keras.layers.Embedding)
-            self.assertIsInstance(model.layers[1], tf.keras.layers.GlobalMaxPooling1D)
-            self.assertIsInstance(model.layers[2], tf.keras.layers.Dropout)
+            self.assertIsInstance(model.layers[1], tf.keras.layers.Dropout)
+            self.assertIsInstance(model.layers[2], tf.keras.layers.GlobalMaxPooling1D)
             self.assertIsInstance(model.layers[3], tf.keras.layers.Dense)
 
             # call test time
@@ -75,9 +76,10 @@ class TestXSWEM(tf.test.TestCase):
 
             # call train time
             dropout_test_sentence_prediction = model.call(self.test_sentence, training=True).numpy()[0][0]
-            # we turn off the second unit, so the output is 2*3 + 4*0 + 5 = 11, so the output after the activation
-            # should be 1/(1+e^(-11)) = 0.99998
-            expected_dropout_test_sentence_prediction = 0.99998
+            # we dropout some units in the embeddings, so the output of the max pool layer is (2,0), so the output of
+            # the model is 2*2 + 4*0 + 5 = 9 prior to the activation, so the output after the activation should be
+            # 1/(1+e^(-9)) = 0.99988 (to 5 d.p.)
+            expected_dropout_test_sentence_prediction = 0.99988
             self.assertAlmostEqual(dropout_test_sentence_prediction, expected_dropout_test_sentence_prediction,
                                    places=5)
 
