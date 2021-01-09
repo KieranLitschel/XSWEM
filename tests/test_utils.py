@@ -33,10 +33,12 @@ class TestUtils(unittest.TestCase):
     def test_prepare_embedding_weights_map_from_glove(self):
         glove_file_path = "foo"
         vocab = ["hello", "foo", "<unk>"]
-        read_data = "hello 1.1 0.2 3.3\n<unk> -1.1 -0.2 -3.3\n"
-        with patch('builtins.open', mock_open(read_data=read_data)):
+        read_data_iter = ["hello 1.1 0.2 3.3\n", "<unk> -1.1 -0.2 -3.3\n"]
+        with patch('builtins.open', mock_open(read_data=''.join(read_data_iter))) as mocked_open:
             with patch('xswem.utils.tqdm', new_callable=MagicMock()) as mock_tqdm:
-                mock_tqdm.__iter__.return_value = read_data.split("\n")
+                # first line below is necessary for python 3.6 due to iterating being unsupported
+                mocked_open.return_value.__iter__.return_value = read_data_iter
+                mock_tqdm.__iter__.return_value = read_data_iter
                 # test expected return with verbose off
                 embedding_weights_map = prepare_embedding_weights_map_from_glove(glove_file_path, vocab)
                 expected_embedding_weights_map = {
