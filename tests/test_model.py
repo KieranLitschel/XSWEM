@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from xswem.model import XSWEM
+from xswem.exceptions import UnexpectedEmbeddingSizeException
 from unittest.mock import patch, Mock
 
 
@@ -13,6 +14,9 @@ class TestXSWEM(tf.test.TestCase):
         self.embedding_weights = [np.array([[1, -1],
                                             [2, -2],
                                             [3, -3]], dtype=np.float32)]
+        self.embedding_dense_weights = [np.array([[-0.1, 0.1],
+                                                  [0.1, -0.1]], dtype=np.float32),
+                                        np.array([0.5, -0.1], dtype=np.float32)]
         self.output_weights = [np.array([[2],
                                          [4]], dtype=np.float32),
                                np.array([5], dtype=np.float32)]
@@ -23,11 +27,25 @@ class TestXSWEM(tf.test.TestCase):
         # output of the model should be 1/(1+e^(-3)) = 0.95257 (to 5 d.p.)
         self.expected_test_sentence_prediction = 0.95257
 
-    def set_up_model(self, model):
+    @staticmethod
+    def build_model(model):
         model.compile("sgd", "binary_crossentropy")
         model.build([None, 2])
+
+    def set_up_model(self, model):
+        self.build_model(model)
         model.embedding_layer.set_weights(self.embedding_weights)
+        if getattr(model, "embedding_dense_layer", None):
+            model.embedding_dense_layer.set_weights(self.embedding_dense_weights)
         model.output_layer.set_weights(self.output_weights)
+
+    def get_embedding_weights_map(self):
+        embedding_weights_map = {}
+        for i in range(len(self.vocab_map)):
+            word = self.vocab_map[i + 1]
+            weights = self.embedding_weights[0][i]
+            embedding_weights_map[word] = weights
+        return embedding_weights_map
 
     def test_get_config(self):
         expected_config = {'embedding_size': 2,
@@ -36,13 +54,18 @@ class TestXSWEM(tf.test.TestCase):
                            'output_map': {0: 'is_hello_world'},
                            'mask_zero': False,
                            'dropout_rate': None,
-                           'output_regularizer': None}
+                           'output_regularizer': None,
+                           'embedding_weights_map': None,
+                           'adapt_embeddings': None}
         self.assertEqual(self.model.get_config(), expected_config)
 
+    @staticmethod
+    def get_layer_types(model):
+        return [type(layer) for layer in model.layers]
+
     def test_model_architecture(self):
-        self.assertIsInstance(self.model.layers[0], tf.keras.layers.Embedding)
-        self.assertIsInstance(self.model.layers[1], tf.keras.layers.GlobalMaxPooling1D)
-        self.assertIsInstance(self.model.layers[2], tf.keras.layers.Dense)
+        expected_layer_types = [tf.keras.layers.Embedding, tf.keras.layers.GlobalMaxPooling1D, tf.keras.layers.Dense]
+        self.assertListEqual(self.get_layer_types(self.model), expected_layer_types)
 
     def test_call(self):
         test_sentence_prediction = self.model.call(self.test_sentence, training=False).numpy()[0][0]
@@ -54,10 +77,10 @@ class TestXSWEM(tf.test.TestCase):
             training = kwargs['training']
             if training:
                 return tf.convert_to_tensor([[[2, 0],
-                                            [0, -3]]], dtype=tf.float32)
+                                              [0, -3]]], dtype=tf.float32)
             else:
                 return tf.convert_to_tensor([[[2, -2],
-                                            [3, -3]]], dtype=tf.float32)
+                                              [3, -3]]], dtype=tf.float32)
 
         with patch('tensorflow.keras.layers.Dropout.__call__', mock_dropout_call):
 
@@ -65,10 +88,9 @@ class TestXSWEM(tf.test.TestCase):
             self.set_up_model(model)
 
             # model architecture
-            self.assertIsInstance(model.layers[0], tf.keras.layers.Embedding)
-            self.assertIsInstance(model.layers[1], tf.keras.layers.Dropout)
-            self.assertIsInstance(model.layers[2], tf.keras.layers.GlobalMaxPooling1D)
-            self.assertIsInstance(model.layers[3], tf.keras.layers.Dense)
+            expected_layer_types = [tf.keras.layers.Embedding, tf.keras.layers.Dropout,
+                                    tf.keras.layers.GlobalMaxPooling1D, tf.keras.layers.Dense]
+            self.assertListEqual(self.get_layer_types(model), expected_layer_types)
 
             # call test time
             test_sentence_prediction = model.call(self.test_sentence, training=False).numpy()[0][0]
@@ -95,6 +117,62 @@ class TestXSWEM(tf.test.TestCase):
         np_embedding_weights = self.model.get_embedding_weights(return_df=False)
         self.assertIsInstance(np_embedding_weights, np.ndarray)
         np.testing.assert_array_equal(np_embedding_weights, self.embedding_weights[0])
+
+    def get_prepared_word_embeddings(self, embedding_weights_map):
+        model = XSWEM(2, 'sigmoid', self.vocab_map, self.output_map, embedding_weights_map=embedding_weights_map)
+        self.build_model(model)
+        embedding_weights = model.embedding_layer.get_weights()
+        self.assertLen(embedding_weights, 1)
+        return embedding_weights[0]
+
+    def test_prepare_word_embeddings(self):
+        embedding_weights_map = self.get_embedding_weights_map()
+        expected_embedding_weights = self.embedding_weights[0]
+        RANDOM_WEIGHTS = np.array([5, 5])
+        with patch('tensorflow.get_logger', new_callable=Mock()) as mock_logger:
+            with patch('numpy.random.uniform', lambda *args, **kwargs: RANDOM_WEIGHTS):
+                # test with all words in weights map
+                embedding_weights = self.get_prepared_word_embeddings(embedding_weights_map)
+                np.testing.assert_array_equal(embedding_weights, expected_embedding_weights)
+                mock_logger().warn.assert_not_called()
+                # test the random initialization by deleting a word embedding from the map
+                del embedding_weights_map["UNK"]
+                embedding_weights = self.get_prepared_word_embeddings(embedding_weights_map)
+                expected_embedding_weights[0] = RANDOM_WEIGHTS
+                np.testing.assert_array_equal(embedding_weights, expected_embedding_weights)
+                mock_logger().warn.assert_called_once_with(
+                    '1 words had no provided weights in embedding_weights_map so their embedding\'s were initialized '
+                    'randomly'
+                )
+                # test that exception thrown when a word embedding has a different length than specified in the
+                # constructor
+                with self.assertRaises(UnexpectedEmbeddingSizeException):
+                    embedding_weights_map["UNK"] = np.array([1])
+                    XSWEM(2, 'sigmoid', self.vocab_map, self.output_map, embedding_weights_map=embedding_weights_map)
+
+    def test_adapt_embeddings(self):
+        model = XSWEM(2, 'sigmoid', self.vocab_map, self.output_map, adapt_embeddings=True)
+        self.set_up_model(model)
+        # architecture
+        expected_layer_types = [tf.keras.layers.Embedding, tf.keras.layers.Dense,
+                                tf.keras.layers.GlobalMaxPooling1D, tf.keras.layers.Dense]
+        self.assertListEqual(self.get_layer_types(model), expected_layer_types)
+        # call
+        test_sentence_prediction = model.call(self.test_sentence, training=True).numpy()[0][0]
+        # the word embeddings for our test sentence are (2,-2) and (3,-3) respectively. we adapt them using a dense
+        # layer. the new values become (-0.1*x+0.1*y+0.5,0.1*x-0.1*y-0.1) for each vector. so our adapted embeddings are
+        # (-0.2-0.2+0.5,0.2+0.2-0.1) = (0.1,0.3), and (-0.3-0.3+0.5,0.3+0.3-0.1)=(-0.1,0.5). We apply a relu activation
+        # so they become (0.1,0.3) and (0,0.5) respectively. We max pool these vectors so we are left with the vector
+        # (0.1,0.5). Applying our output layer the output of the network is 1/(1+e^(-(0.1*2+0.5*4+5)))=0.99925 to 5 d.p.
+        expected_test_sentence_prediction = 0.99925
+        self.assertAlmostEqual(test_sentence_prediction, expected_test_sentence_prediction, places=5)
+
+    def test_dropout_and_adapt_embeddings(self):
+        model = XSWEM(2, 'sigmoid', self.vocab_map, self.output_map, adapt_embeddings=True, dropout_rate=0.5)
+        self.set_up_model(model)
+        expected_layer_types = [tf.keras.layers.Embedding, tf.keras.layers.Dropout, tf.keras.layers.Dense,
+                                tf.keras.layers.GlobalMaxPooling1D, tf.keras.layers.Dense]
+        self.assertListEqual(self.get_layer_types(model), expected_layer_types)
 
     def test_global_plot_embedding_histogram(self):
         with patch('matplotlib.pyplot.show', new_callable=Mock) as mock_show:
