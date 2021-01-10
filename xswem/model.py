@@ -132,7 +132,7 @@ class XSWEM(tf.keras.Model):
         return [self._vocab_map[i] for i in sorted(self._vocab_map.keys())]
 
     @assert_layers_built
-    def get_embedding_weights(self, return_df=None):
+    def get_embedding_weights(self, return_df=None, adapt_embeddings=None):
         """ Gets the embedding weights for the model.
 
             Parameters
@@ -140,6 +140,10 @@ class XSWEM(tf.keras.Model):
             return_df : bool
                 Whether to return the results as a pandas DataFrame. Default of True. If false then results are returned
                 as a numpy array.
+            adapt_embeddings : bool
+                Argument only applies if adapt_embeddings was set as true in the constructor. Argument is whether to
+                apply the adapt embeddings Dense layer to each of the word embeddings. Default of false, meaning do not
+                apply it.
 
             Returns
             -------
@@ -151,24 +155,36 @@ class XSWEM(tf.keras.Model):
                 DataFrame.
         """
         return_df = return_df if return_df is not None else True
-        embedding_weights = self.embedding_layer.weights[0].numpy()
+        adapt_embeddings = adapt_embeddings if adapt_embeddings is not None else False
+        embedding_weights = self.embedding_layer.get_weights()[0]
+        if self._adapt_embeddings and adapt_embeddings:
+            embedding_weights = tf.convert_to_tensor(embedding_weights)
+            embedding_weights = self.embedding_dense_layer.call(embedding_weights).numpy()
         if return_df:
             return pd.DataFrame(embedding_weights, index=self.get_vocab_ordered_by_key())
         else:
             return embedding_weights
 
-    def global_plot_embedding_histogram(self):
+    def global_plot_embedding_histogram(self, adapt_embeddings=None):
         """ Plots a histogram of the flattened embedding weights. This graph is equivalent to figure 1 in the original
             paper.
+
+            Parameters
+            ----------
+            adapt_embeddings : bool
+                Argument only applies if adapt_embeddings was set as true in the constructor. Argument is whether to
+                apply the adapt embeddings Dense layer to each of the word embeddings. Default of false, meaning do not
+                apply it.
         """
-        embedding_weights_flat = self.get_embedding_weights(return_df=False).flatten()
+        embedding_weights_flat = self.get_embedding_weights(return_df=False,
+                                                            adapt_embeddings=adapt_embeddings).flatten()
         ax = sns.histplot(embedding_weights_flat)
         ax.set_title("Histogram for Learned Word Embeddings")
         ax.set_xlabel("Embedding Component Value")
         ax.set_ylabel("Frequency")
         plt.show()
 
-    def global_explain_embedding_components(self, n=None):
+    def global_explain_embedding_components(self, n=None, adapt_embeddings=None):
         """ Gets the words corresponding to the n largest values for each component of the word embedding. These can be
             analysed to determine the meaning of each component (column) as discussed in section 4.1.1 of the original
             paper.
@@ -177,6 +193,10 @@ class XSWEM(tf.keras.Model):
             ----------
             n : int
                 Number of words to return for each component. Default of 5 as proposed in the original paper.
+            adapt_embeddings : bool
+                Argument only applies if adapt_embeddings was set as true in the constructor. Argument is whether to
+                apply the adapt embeddings Dense layer to each of the word embeddings. Default of false, meaning do not
+                apply it.
 
             Returns
             -------
@@ -187,7 +207,7 @@ class XSWEM(tf.keras.Model):
                 values.
         """
         n = n or 5
-        embedding_weights = self.get_embedding_weights()
+        embedding_weights = self.get_embedding_weights(adapt_embeddings=adapt_embeddings)
         explained_components = {**{"Word Rank": range(1, n + 1)},
                                 **{column_name: embedding_weights.nlargest(n, columns=column_name).index
                                    for column_name in embedding_weights.columns}}
