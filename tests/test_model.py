@@ -84,6 +84,19 @@ class ArchitectureIndependentTests(object):
                                                      columns=pd.Index([0, 1], dtype=object))
         pd.testing.assert_frame_equal(explained_components, expected_explained_components)
 
+    @staticmethod
+    def test_frozen_embeddings(model):
+        model.fit(TEST_SENTENCE, np.array([[1.0]], dtype=np.float32), epochs=1, verbose=0)
+        embedding_weights = model.get_embedding_weights(return_df=False)
+        np.testing.assert_array_equal(embedding_weights, EMBEDDING_WEIGHTS[0])
+
+    @staticmethod
+    def test_unfrozen_embeddings(model):
+        model.fit(TEST_SENTENCE, np.array([[1.0]], dtype=np.float32), epochs=1, verbose=0)
+        embedding_weights = model.get_embedding_weights(return_df=False)
+        with np.testing.assert_raises(AssertionError):
+            np.testing.assert_array_equal(embedding_weights, EMBEDDING_WEIGHTS[0])
+
 
 class TestXSWEMBasic(tf.test.TestCase):
     """ Tests most basic XSWEM architecture """
@@ -124,6 +137,9 @@ class TestXSWEMBasic(tf.test.TestCase):
 
     def test_global_explain_embedding_components(self):
         ArchitectureIndependentTests.test_global_explain_embedding_components(self.model)
+
+    def test_unfrozen_embeddings(self):
+        ArchitectureIndependentTests.test_unfrozen_embeddings(self.model)
 
 
 class TestXSWEMDropoutEmbedding(tf.test.TestCase):
@@ -203,11 +219,11 @@ class TestXSWEMPrepareEmbeddings(tf.test.TestCase):
             build_model(embedding_weights_map=self.embedding_weights_map)
 
 
-class TestXSWEMAdaptEmbeddings(tf.test.TestCase):
-    """ Tests basic XSWEM with adapted embeddings """
+class TestXSWEMAdaptFrozenEmbeddings(tf.test.TestCase):
+    """ Tests basic XSWEM with adapted frozen embeddings """
 
     def setUp(self):
-        self.model = set_up_model(adapt_embeddings=True)
+        self.model = set_up_model(adapt_embeddings=True, freeze_embeddings=True)
         # our word embeddings are (1,-1), (2,-2), and (3,-3). we adapt them using embedding_dense_layer. the new
         # values become (-0.1*x+0.1*y+0.5,0.1*x-0.1*y-0.1) for each vector. so our adapted embeddings are
         # (-0.1-0.1+0.5,0.1+0.1-0.1) = (0.3,0.1), (-0.2-0.2+0.5,0.2+0.2-0.1) = (0.1,0.3), and
@@ -255,6 +271,9 @@ class TestXSWEMAdaptEmbeddings(tf.test.TestCase):
                                                              index=pd.Index([1, 2], name="Word Rank"),
                                                              columns=pd.Index([0, 1], dtype=object))
         pd.testing.assert_frame_equal(explained_adapted_components, expected_explained_adapted_components)
+
+    def test_frozen_embeddings(self):
+        ArchitectureIndependentTests.test_frozen_embeddings(self.model)
 
 
 class TestXSWEMDropoutAdaptEmbeddings(tf.test.TestCase):
