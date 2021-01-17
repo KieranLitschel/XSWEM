@@ -13,7 +13,8 @@ _EMBEDDINGS_INITIALIZER_UPPER_BOUND = 0.01
 class XSWEM(tf.keras.Model):
 
     def __init__(self, embedding_size, output_activation, vocab_map, output_map, mask_zero=False, dropout_rate=None,
-                 output_regularizer=None, embedding_weights_map=None, adapt_embeddings=None, **kwargs):
+                 output_regularizer=None, embedding_weights_map=None, adapt_embeddings=None, freeze_embeddings=None,
+                 **kwargs):
         """ Model class for XSWEM.
 
             Parameters
@@ -41,6 +42,8 @@ class XSWEM(tf.keras.Model):
                 Whether to apply a Dense layer to the output of the embedding layer. The dense layer has embedding_size
                 units and uses a relu activation function. This corresponds to method ii described in chapter 4 of the
                 original paper. Default of False, meaning no dense layer.
+            freeze_embeddings : bool
+                Whether to freeze the embedding weights. Default of False, meaning do not freeze them.
         """
         super(XSWEM, self).__init__(**kwargs)
         self._embedding_size = embedding_size
@@ -52,6 +55,7 @@ class XSWEM(tf.keras.Model):
         self._output_regularizer = output_regularizer
         self._adapt_embeddings = adapt_embeddings
         self._embedding_weights_map = embedding_weights_map
+        self._freeze_embeddings = freeze_embeddings if freeze_embeddings is not None else False
         self._kwargs = kwargs
         embeddings_initializer = tf.keras.initializers.RandomUniform(_EMBEDDINGS_INITIALIZER_LOWER_BOUND,
                                                                      _EMBEDDINGS_INITIALIZER_UPPER_BOUND)
@@ -60,7 +64,8 @@ class XSWEM(tf.keras.Model):
                                                          mask_zero=self._mask_zero,
                                                          embeddings_initializer=embeddings_initializer,
                                                          weights=embedding_weights,
-                                                         name="Embedding")
+                                                         name="Embedding",
+                                                         trainable=not self._freeze_embeddings)
         if self._dropout_rate:
             self.embedding_dropout_layer = tf.keras.layers.Dropout(self._dropout_rate, name="EmbeddingDropout")
         if self._adapt_embeddings:
