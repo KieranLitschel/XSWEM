@@ -1,6 +1,6 @@
 tensorflow>=2.0.0
 datasets
-numpy
 pandas
+numpy
 seaborn
 tqdm
