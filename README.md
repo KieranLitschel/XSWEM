@@ -16,7 +16,7 @@ So far we have implemented the global explainability method proposed in section 
 
 We are currently implementing some methods for local explainability.
 
-# How to install
+## How to install
 
 This package can be installed using pip.
 
