@@ -1,6 +1,6 @@
 # XSWEM
 
-main [![Build Status](https://travis-ci.org/KieranLitschel/XSWEM.svg?branch=main)](https://travis-ci.org/KieranLitschel/XSWEM), develop [![Build Status](https://travis-ci.org/KieranLitschel/XSWEM.svg?branch=develop)](https://travis-ci.org/KieranLitschel/XSWEM)
+[![Build Status](https://img.shields.io/travis/KieranLitschel/XSWEM/main.svg?label=main)](https://travis-ci.org/KieranLitschel/XSWEM) [![Build Status](https://img.shields.io/travis/KieranLitschel/XSWEM/develop.svg?label=develop)](https://travis-ci.org/KieranLitschel/XSWEM)
 
 A simple and explainable deep learning model for NLP implemented in TensorFlow.
 
