@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 REQUIRED_PCKGS = [
-    "tensorflow>=2.0.0"
+    "tensorflow>=2.0.0",
     "datasets",
     "pandas",
     "numpy>=1.16.5",
@@ -14,7 +14,7 @@ REQUIRED_PCKGS = [
 
 setuptools.setup(
     name="xswem",
-    version="0.1.0",
+    version="0.1.1",
     author="Kieran Litschel",
     author_email="kieran.litschel@outlook.com",
     description="A simple and explainable deep learning model for NLP.",
@@ -31,4 +31,7 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
     python_requires='>=3.6',
+    install_requires=REQUIRED_PCKGS,
+    keywords='nlp fast machine learning deep simple tensorflow model word embeddings keras glove explainable swem '
+             'global local explanations'
 )
