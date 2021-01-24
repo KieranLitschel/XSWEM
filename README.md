@@ -15,3 +15,11 @@ For a demo of how to train a basic SWEM-max model see [train_xswem.ipynb](https:
 So far we have implemented the global explainability method proposed in section 4.1.1 of the original paper. You can see a demo of this method in the notebook [global_explain_embedding_components.ipynb](https://github.com/KieranLitschel/XSWEM/blob/main/notebooks/global_explain_embedding_components.ipynb).
 
 We are currently implementing some methods for local explainability.
+
+## How to install
+
+This package can be installed using pip.
+
+```
+pip install xswem
+```
