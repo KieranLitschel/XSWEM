@@ -8,7 +8,7 @@ Based on SWEM-max as proposed by Shen et al. in [Baseline Needs More Love: On Si
 
 This package is currently in development. The purpose of this package is to make it easy to train and explain SWEM-max. 
 
-You can find demos of the functionality we have implemented in the [notebooks](https://github.com/KieranLitschel/XSWEM/tree/develop/notebooks) directory of the package. Each notebook has a badge that allows you to run it yourself in Google Colab. We will add more notebooks as new functionality is added.
+You can find demos of the functionality we have implemented in the [notebooks](https://github.com/KieranLitschel/XSWEM/blob/main/notebooks) directory of the package. Each notebook has a badge that allows you to run it yourself in Google Colab. We will add more notebooks as new functionality is added.
 
 For a demo of how to train a basic SWEM-max model see [train_xswem.ipynb](https://github.com/KieranLitschel/XSWEM/blob/main/notebooks/train_xswem.ipynb).
 
@@ -18,7 +18,7 @@ We are currently implementing some methods for local explainability.
 
 ## How to install
 
-This package can be installed using pip.
+This package is hosted on [PyPI](https://pypi.org/project/xswem/) and can be installed using pip.
 
 ```
 pip install xswem
