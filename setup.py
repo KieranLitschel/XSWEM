@@ -9,6 +9,7 @@ REQUIRED_PCKGS = [
     "pandas",
     "numpy>=1.16.5",
     "seaborn",
+    "matplotlib",
     "tqdm"
 ]
 
