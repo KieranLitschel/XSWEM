@@ -4,7 +4,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 from xswem.utils import assert_layers_built
-from xswem.exceptions import UnexpectedEmbeddingSizeException
+from xswem.exceptions import UnexpectedEmbeddingSizeException, WordMissingFromVocabMapException
 
 _EMBEDDINGS_INITIALIZER_LOWER_BOUND = -0.01
 _EMBEDDINGS_INITIALIZER_UPPER_BOUND = 0.01
@@ -24,7 +24,9 @@ class XSWEM(tf.keras.Model):
             output_activation : tf.keras.activations.Activation
                 Activation function to use in the output layer.
             vocab_map : dict
-                Map of int to str. Describes the word corresponding to each int in the input.
+                Map of int to str. Describes the word corresponding to each possible int in the input to the model. If
+                mask_zero, then should have all keys in the range 1 to len(vocab_map)+1, otherwise should have all keys
+                in the range 0 to len(vocab_map).
             output_map : dict
                 Map of int to str. Describes each output unit in English.
             mask_zero : bool
@@ -57,10 +59,12 @@ class XSWEM(tf.keras.Model):
         self._embedding_weights_map = embedding_weights_map
         self._freeze_embeddings = freeze_embeddings if freeze_embeddings is not None else False
         self._kwargs = kwargs
+        self._verify_vocab_map_valid()
         embeddings_initializer = tf.keras.initializers.RandomUniform(_EMBEDDINGS_INITIALIZER_LOWER_BOUND,
                                                                      _EMBEDDINGS_INITIALIZER_UPPER_BOUND)
         embedding_weights = self._prepare_word_embeddings() if embedding_weights_map else None
-        self.embedding_layer = tf.keras.layers.Embedding(len(self._vocab_map), self._embedding_size,
+        embedding_input_dim = len(self._vocab_map) + 1 if self._mask_zero else len(self._vocab_map)
+        self.embedding_layer = tf.keras.layers.Embedding(embedding_input_dim, self._embedding_size,
                                                          mask_zero=self._mask_zero,
                                                          embeddings_initializer=embeddings_initializer,
                                                          weights=embedding_weights,
@@ -75,6 +79,13 @@ class XSWEM(tf.keras.Model):
         self.output_layer = tf.keras.layers.Dense(len(self._output_map), activation=self._output_activation,
                                                   kernel_regularizer=self._output_regularizer, name="Output")
 
+    def _verify_vocab_map_valid(self):
+        """ Checks that the vocab map is in the format expected """
+        vocab_map_offset = 1 if self._mask_zero else 0
+        for vocab_num in range(vocab_map_offset, len(self._vocab_map) + vocab_map_offset):
+            if vocab_num not in self._vocab_map:
+                raise WordMissingFromVocabMapException(vocab_num)
+
     def _prepare_word_embeddings(self):
         """ Builds the embedding weights to initialize the embedding layer with. If a word in vocab_map is also in
             embedding_weights_map, then the weights provided there are used. Otherwise they are initialized randomly
@@ -86,6 +97,8 @@ class XSWEM(tf.keras.Model):
                 Weights to initialize the word embedding layer with.
         """
         embedding_weights = []
+        if self._mask_zero:
+            embedding_weights.append(np.zeros(self._embedding_size))
         random_count = 0
         for word in self.get_vocab_ordered_by_key():
             word_vec = self._embedding_weights_map.get(word)
@@ -105,13 +118,18 @@ class XSWEM(tf.keras.Model):
         return [np.array(embedding_weights)]
 
     def call(self, inputs, training=None, mask=None):
+        x = self._call_embedding_block(inputs, training=training)
+        x = self.max_pool_layer(x)
+        return self.output_layer(x)
+
+    def _call_embedding_block(self, inputs, training=None):
+        """ For a given input, gets the embedding weights. Applies dropout and adapts embeddings where specified. """
         x = self.embedding_layer(inputs)
         if self._dropout_rate:
             x = self.embedding_dropout_layer(x, training=training)
         if self._adapt_embeddings:
             x = self.embedding_dense_layer(x)
-        x = self.max_pool_layer(x)
-        return self.output_layer(x)
+        return x
 
     def get_config(self):
         return {**{
@@ -134,10 +152,10 @@ class XSWEM(tf.keras.Model):
             list
                 The words in the vocabulary sorted in ascending order by key.
         """
-        return [self._vocab_map[i] for i in sorted(self._vocab_map.keys())]
+        return [self._vocab_map[vocab_num] for vocab_num in sorted(self._vocab_map.keys())]
 
     @assert_layers_built
-    def get_embedding_weights(self, return_df=None, adapt_embeddings=None):
+    def get_embedding_weights(self, return_df=None, vocab_nums=None):
         """ Gets the embedding weights for the model.
 
             Parameters
@@ -145,10 +163,9 @@ class XSWEM(tf.keras.Model):
             return_df : bool
                 Whether to return the results as a pandas DataFrame. Default of True. If false then results are returned
                 as a numpy array.
-            adapt_embeddings : bool
-                Argument only applies if adapt_embeddings was set as true in the constructor. Argument is whether to
-                apply the adapt embeddings Dense layer to each of the word embeddings. Default of false, meaning do not
-                apply it.
+            vocab_nums : iterable
+                List of ints describing which words to get the embedding weights of. If None gets the embeddings for
+                all words in vocab_map.
 
             Returns
             -------
@@ -160,36 +177,34 @@ class XSWEM(tf.keras.Model):
                 DataFrame.
         """
         return_df = return_df if return_df is not None else True
-        adapt_embeddings = adapt_embeddings if adapt_embeddings is not None else False
-        embedding_weights = self.embedding_layer.get_weights()[0]
-        if self._adapt_embeddings and adapt_embeddings:
-            embedding_weights = tf.convert_to_tensor(embedding_weights)
-            embedding_weights = self.embedding_dense_layer.call(embedding_weights).numpy()
+        if vocab_nums is None:
+            vocab_nums = sorted(list(self._vocab_map.keys()))
+        embedding_weights = self._call_embedding_block(np.array([vocab_nums]), training=False).numpy()[0]
         if return_df:
-            return pd.DataFrame(embedding_weights, index=self.get_vocab_ordered_by_key())
+            vocab = [self._vocab_map[vocab_num] for vocab_num in vocab_nums]
+            return pd.DataFrame(embedding_weights, index=vocab)
         else:
             return embedding_weights
 
-    def global_plot_embedding_histogram(self, adapt_embeddings=None):
+    def global_plot_embedding_histogram(self):
         """ Plots a histogram of the flattened embedding weights. This graph is equivalent to figure 1 in the original
             paper.
-
-            Parameters
-            ----------
-            adapt_embeddings : bool
-                Argument only applies if adapt_embeddings was set as true in the constructor. Argument is whether to
-                apply the adapt embeddings Dense layer to each of the word embeddings. Default of false, meaning do not
-                apply it.
         """
-        embedding_weights_flat = self.get_embedding_weights(return_df=False,
-                                                            adapt_embeddings=adapt_embeddings).flatten()
+        embedding_weights_flat = self.get_embedding_weights(return_df=False).flatten()
         ax = sns.histplot(embedding_weights_flat)
         ax.set_title("Histogram for Learned Word Embeddings")
         ax.set_xlabel("Embedding Component Value")
         ax.set_ylabel("Frequency")
         plt.show()
 
-    def global_explain_embedding_components(self, n=None, adapt_embeddings=None):
+    def _embedding_components_top_n_words(self, n, vocab_nums=None):
+        embedding_weights = self.get_embedding_weights(vocab_nums=vocab_nums)
+        explained_components = {**{"Word Rank": range(1, n + 1)},
+                                **{column_name: embedding_weights.nlargest(n, columns=column_name).index
+                                   for column_name in embedding_weights.columns}}
+        return pd.DataFrame.from_dict(explained_components).set_index("Word Rank")
+
+    def global_explain_embedding_components(self, n=None):
         """ Gets the words corresponding to the n largest values for each component of the word embedding. These can be
             analysed to determine the meaning of each component (column) as discussed in section 4.1.1 of the original
             paper.
@@ -198,10 +213,6 @@ class XSWEM(tf.keras.Model):
             ----------
             n : int
                 Number of words to return for each component. Default of 5 as proposed in the original paper.
-            adapt_embeddings : bool
-                Argument only applies if adapt_embeddings was set as true in the constructor. Argument is whether to
-                apply the adapt embeddings Dense layer to each of the word embeddings. Default of false, meaning do not
-                apply it.
 
             Returns
             -------
@@ -212,8 +223,35 @@ class XSWEM(tf.keras.Model):
                 values.
         """
         n = n or 5
-        embedding_weights = self.get_embedding_weights(adapt_embeddings=adapt_embeddings)
-        explained_components = {**{"Word Rank": range(1, n + 1)},
-                                **{column_name: embedding_weights.nlargest(n, columns=column_name).index
-                                   for column_name in embedding_weights.columns}}
-        return pd.DataFrame.from_dict(explained_components).set_index("Word Rank")
+        return self._embedding_components_top_n_words(n)
+
+    def local_explain_word_shortlist(self, pre_processed_input_sentence, by_index=None):
+        """ Gets the embeddings of the words in the input_sentence and finds the word corresponding to the maximum value
+            for each component (effectively the argmax of each component). This is equivalent to the output of the max
+            pooling layer, except instead of the output being the maximum value for each component we have the word that
+            corresponds to the maximum value. As no words outside this list contribute to the output of the max-pooling
+            layer, no words outside this list contribute to the prediction of the model for the input sentence. Thus,
+            these words are a shortlist of words that the model has learnt are most important to make a prediction given
+            the input sentence.
+
+            Parameters
+            ----------
+            pre_processed_input_sentence : np.array
+                The input sentence we want a local explanation for. This should be pre-processed in the same way as the
+                input to the model during training.
+            by_index : bool
+                Determines whether the output of the function is returned as a pd.DataFrame or np.array. Default of
+                false.
+
+            Returns
+            -------
+            pd.DataFrame or np.array
+                If by_index is true, returns the result as a pd.DataFrame, describing the argmax word for each
+                component. If by_index is false, returns the results as a np.array, listing the unique words that are
+                argmax for at least one component.
+        """
+        unique_input_sentence = np.unique(pre_processed_input_sentence)
+        word_shortlist = self._embedding_components_top_n_words(n=1, vocab_nums=unique_input_sentence)
+        if not by_index:
+            word_shortlist = np.sort(np.unique(word_shortlist.values))
+        return word_shortlist
