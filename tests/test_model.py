@@ -2,15 +2,20 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from xswem.model import XSWEM
-from xswem.exceptions import UnexpectedEmbeddingSizeException
+from xswem.exceptions import UnexpectedEmbeddingSizeException, WordMissingFromVocabMapException
 from unittest.mock import patch, Mock
 import copy
 
-VOCAB_MAP = {1: "UNK", 2: "hello", 3: "world"}
+VOCAB_MAP = {0: "UNK", 1: "hello", 2: "world"}
+MASK_ZERO_VOCAB_MAP = {1: "UNK", 2: "hello", 3: "world"}
 OUTPUT_MAP = {0: "is_hello_world"}
 EMBEDDING_WEIGHTS = [np.array([[1, -1],
                                [2, -2],
                                [3, -3]], dtype=np.float32)]
+MASK_ZERO_EMBEDDING_WEIGHTS = [np.array([[0, 0],
+                                         [1, -1],
+                                         [2, -2],
+                                         [3, -3]], dtype=np.float32)]
 EMBEDDING_WEIGHTS_MAP = {
     "UNK": np.array([1, -1], dtype=np.float32),
     "hello": np.array([2, -2], dtype=np.float32),
@@ -23,6 +28,7 @@ OUTPUT_WEIGHTS = [np.array([[2],
                             [4]], dtype=np.float32),
                   np.array([5], dtype=np.float32)]
 TEST_SENTENCE = np.array([[1, 2]], dtype=np.int)
+MASK_ZERO_TEST_SENTENCE = np.array([[2, 3]], dtype=np.int)
 # output of max pool should be the vector (3,-2), multiplying by the coefficients of the output layer and adding
 # the biases we get the output is 2*3 + 4*-2 + 5 = 6 - 8 + 5 = 3, the activation function is sigmoid, so the
 # output of the model should be 1/(1+e^(-3)) = 0.95257 (to 5 d.p.)
@@ -30,7 +36,8 @@ EXPECTED_BASIC_TEST_SENTENCE_PREDICTION = 0.95257
 
 
 def build_model(**kwargs):
-    model = XSWEM(2, 'sigmoid', VOCAB_MAP, OUTPUT_MAP, **kwargs)
+    vocab_map = MASK_ZERO_VOCAB_MAP if kwargs.get("mask_zero") else VOCAB_MAP
+    model = XSWEM(2, 'sigmoid', vocab_map=vocab_map, output_map=OUTPUT_MAP, **kwargs)
     model.compile("sgd", "binary_crossentropy")
     model.build([None, 2])
     return model
@@ -38,7 +45,8 @@ def build_model(**kwargs):
 
 def set_up_model(**kwargs):
     model = build_model(**kwargs)
-    model.embedding_layer.set_weights(EMBEDDING_WEIGHTS)
+    embedding_weights = MASK_ZERO_EMBEDDING_WEIGHTS if kwargs.get("mask_zero") else EMBEDDING_WEIGHTS
+    model.embedding_layer.set_weights(embedding_weights)
     if getattr(model, "embedding_dense_layer", None):
         model.embedding_dense_layer.set_weights(EMBEDDING_DENSE_WEIGHTS)
     model.output_layer.set_weights(OUTPUT_WEIGHTS)
@@ -49,7 +57,7 @@ def get_layer_types(model):
     return [type(layer) for layer in model.layers]
 
 
-class ArchitectureIndependentTests(object):
+class ArchitectureIndependentTests:
     """ Tests which are independent of architecture """
 
     @staticmethod
@@ -65,10 +73,10 @@ class ArchitectureIndependentTests(object):
         np.testing.assert_array_equal(np_embedding_weights, EMBEDDING_WEIGHTS[0])
 
     @staticmethod
-    def test_global_plot_embedding_histogram(model, expected_data, adapt_embeddings=None):
+    def test_global_plot_embedding_histogram(model, expected_data):
         with patch('matplotlib.pyplot.show', new_callable=Mock) as mock_show:
             with patch('seaborn.histplot', new_callable=Mock) as mock_histplot:
-                model.global_plot_embedding_histogram(adapt_embeddings=adapt_embeddings)
+                model.global_plot_embedding_histogram()
                 mock_histplot.assert_called_once()
                 np.testing.assert_array_almost_equal(mock_histplot.call_args[0][0], expected_data)
                 mock_histplot.return_value.set_title.assert_called_once_with("Histogram for Learned Word Embeddings")
@@ -87,8 +95,8 @@ class ArchitectureIndependentTests(object):
     @staticmethod
     def test_frozen_embeddings(model):
         model.fit(TEST_SENTENCE, np.array([[1.0]], dtype=np.float32), epochs=1, verbose=0)
-        embedding_weights = model.get_embedding_weights(return_df=False)
-        np.testing.assert_array_equal(embedding_weights, EMBEDDING_WEIGHTS[0])
+        embedding_weights = model.embedding_layer.get_weights()
+        np.testing.assert_array_equal(embedding_weights, EMBEDDING_WEIGHTS)
 
     @staticmethod
     def test_unfrozen_embeddings(model):
@@ -104,10 +112,14 @@ class TestXSWEMBasic(tf.test.TestCase):
     def setUp(self):
         self.model = set_up_model()
 
+    def test_word_missing_from_vocab_map_exception(self):
+        with self.assertRaises(WordMissingFromVocabMapException):
+            XSWEM(2, 'sigmoid', MASK_ZERO_VOCAB_MAP, OUTPUT_MAP)
+
     def test_get_config(self):
         expected_config = {'embedding_size': 2,
                            'output_activation': 'sigmoid',
-                           'vocab_map': {1: 'UNK', 2: 'hello', 3: 'world'},
+                           'vocab_map': {0: 'UNK', 1: 'hello', 2: 'world'},
                            'output_map': {0: 'is_hello_world'},
                            'mask_zero': False,
                            'dropout_rate': None,
@@ -131,6 +143,11 @@ class TestXSWEMBasic(tf.test.TestCase):
         ArchitectureIndependentTests.test_get_embedding_weights_df(self.model)
         ArchitectureIndependentTests.test_get_embedding_weights_np(self.model)
 
+    def test_get_embedding_weights_vocab_nums(self):
+        embedding_weights = self.model.get_embedding_weights(return_df=False, vocab_nums=[1, 2])
+        expected_embedding_weights = EMBEDDING_WEIGHTS[0][[1, 2]]
+        np.testing.assert_array_equal(embedding_weights, expected_embedding_weights)
+
     def test_global_plot_embedding_histogram(self):
         expected_data = EMBEDDING_WEIGHTS[0].flatten()
         ArchitectureIndependentTests.test_global_plot_embedding_histogram(self.model, expected_data)
@@ -140,6 +157,46 @@ class TestXSWEMBasic(tf.test.TestCase):
 
     def test_unfrozen_embeddings(self):
         ArchitectureIndependentTests.test_unfrozen_embeddings(self.model)
+
+    def test_local_explain_most_salient_words(self):
+        shortlist = self.model.local_explain_most_salient_words(TEST_SENTENCE[0])
+        expected_shortlist = np.array(["hello", "world"])
+        np.testing.assert_array_equal(shortlist, expected_shortlist)
+
+    def test_local_explain_most_salient_words_by_index(self):
+        shortlist = self.model.local_explain_most_salient_words(TEST_SENTENCE[0], by_index=True)
+        expected_shortlist = pd.DataFrame(np.array([["world", "hello"]]),
+                                          index=pd.Index([1], name="Word Rank"),
+                                          columns=pd.Index([0, 1], dtype=object))
+        pd.testing.assert_frame_equal(shortlist, expected_shortlist)
+
+
+class TestXSWEMMaskZero(tf.test.TestCase):
+    """ Tests XSWEM with mask_zero """
+
+    def setUp(self):
+        self.model = set_up_model(mask_zero=True)
+
+    def test_word_missing_from_vocab_map_exception(self):
+        with self.assertRaises(WordMissingFromVocabMapException):
+            XSWEM(2, 'sigmoid', VOCAB_MAP, OUTPUT_MAP, mask_zero=True)
+
+    def test_get_embedding_weights_vocab_nums(self):
+        embedding_weights = self.model.get_embedding_weights(return_df=False, vocab_nums=[2, 3])
+        expected_embedding_weights = MASK_ZERO_EMBEDDING_WEIGHTS[0][[2, 3]]
+        np.testing.assert_array_equal(embedding_weights, expected_embedding_weights)
+
+    def test_local_explain_most_salient_words(self):
+        shortlist = self.model.local_explain_most_salient_words(MASK_ZERO_TEST_SENTENCE[0])
+        expected_shortlist = np.array(["hello", "world"])
+        np.testing.assert_array_equal(shortlist, expected_shortlist)
+
+    def test_local_explain_most_salient_words_by_index(self):
+        shortlist = self.model.local_explain_most_salient_words(MASK_ZERO_TEST_SENTENCE[0], by_index=True)
+        expected_shortlist = pd.DataFrame(np.array([["world", "hello"]]),
+                                          index=pd.Index([1], name="Word Rank"),
+                                          columns=pd.Index([0, 1], dtype=object))
+        pd.testing.assert_frame_equal(shortlist, expected_shortlist)
 
 
 class TestXSWEMDropoutEmbedding(tf.test.TestCase):
@@ -186,7 +243,6 @@ class TestXSWEMPrepareEmbeddings(tf.test.TestCase):
     def setUp(self):
         self.embedding_weights_map = copy.deepcopy(EMBEDDING_WEIGHTS_MAP)
         self.expected_embedding_weights = copy.deepcopy(EMBEDDING_WEIGHTS)[0]
-        self.random_weights = np.array([5, 5])
 
     def get_prepared_word_embeddings(self, embedding_weights_map):
         model = build_model(embedding_weights_map=embedding_weights_map)
@@ -202,11 +258,51 @@ class TestXSWEMPrepareEmbeddings(tf.test.TestCase):
                 mock_logger().warn.assert_not_called()
 
     def test_word_missing(self):
+        random_weights = np.array([5, 5])
         with patch('tensorflow.get_logger', new_callable=Mock()) as mock_logger:
-            with patch('numpy.random.uniform', lambda *args, **kwargs: self.random_weights):
+            with patch('numpy.random.uniform', lambda *args, **kwargs: random_weights):
                 del self.embedding_weights_map["UNK"]
                 embedding_weights = self.get_prepared_word_embeddings(self.embedding_weights_map)
-                self.expected_embedding_weights[0] = self.random_weights
+                self.expected_embedding_weights[0] = random_weights
+                np.testing.assert_array_equal(embedding_weights, self.expected_embedding_weights)
+                mock_logger().warn.assert_called_once_with(
+                    '1 words had no provided weights in embedding_weights_map so their embedding\'s were initialized '
+                    'randomly'
+                )
+
+    def test_unexpected_embedding_size(self):
+        with self.assertRaises(UnexpectedEmbeddingSizeException):
+            self.embedding_weights_map["UNK"] = np.array([1])
+            build_model(embedding_weights_map=self.embedding_weights_map)
+
+
+class TestXSWEMMaskZeroPrepareEmbeddings(tf.test.TestCase):
+    """ Tests XSWEM mask_zero with pre-trained embeddings """
+
+    def setUp(self):
+        self.embedding_weights_map = copy.deepcopy(EMBEDDING_WEIGHTS_MAP)
+        self.expected_embedding_weights = copy.deepcopy(MASK_ZERO_EMBEDDING_WEIGHTS)[0]
+
+    def get_prepared_word_embeddings(self, embedding_weights_map):
+        model = build_model(mask_zero=True, embedding_weights_map=embedding_weights_map)
+        embedding_weights = model.embedding_layer.get_weights()
+        self.assertLen(embedding_weights, 1)
+        return embedding_weights[0]
+
+    def test_all_words(self):
+        with patch('tensorflow.get_logger', new_callable=Mock()) as mock_logger:
+            with patch('numpy.random.uniform', lambda *args, **kwargs: self.random_weights):
+                embedding_weights = self.get_prepared_word_embeddings(self.embedding_weights_map)
+                np.testing.assert_array_equal(embedding_weights, self.expected_embedding_weights)
+                mock_logger().warn.assert_not_called()
+
+    def test_word_missing(self):
+        random_weights = np.array([5, 5])
+        with patch('tensorflow.get_logger', new_callable=Mock()) as mock_logger:
+            with patch('numpy.random.uniform', lambda *args, **kwargs: random_weights):
+                del self.embedding_weights_map["UNK"]
+                embedding_weights = self.get_prepared_word_embeddings(self.embedding_weights_map)
+                self.expected_embedding_weights[1] = random_weights
                 np.testing.assert_array_equal(embedding_weights, self.expected_embedding_weights)
                 mock_logger().warn.assert_called_once_with(
                     '1 words had no provided weights in embedding_weights_map so their embedding\'s were initialized '
@@ -248,25 +344,19 @@ class TestXSWEMAdaptFrozenEmbeddings(tf.test.TestCase):
         self.assertAlmostEqual(test_sentence_prediction, expected_test_sentence_prediction, places=5)
 
     def test_get_embedding_weights(self):
-        ArchitectureIndependentTests.test_get_embedding_weights_df(self.model)
-        ArchitectureIndependentTests.test_get_embedding_weights_np(self.model)
-        df_embedding_weights = self.model.get_embedding_weights(adapt_embeddings=True)
+        df_embedding_weights = self.model.get_embedding_weights()
         expected_df_embedding_weights = pd.DataFrame(self.expected_adapted_embedding_weights, columns=pd.Index([0, 1]),
                                                      index=pd.Index(["UNK", "hello", "world"]))
         pd.testing.assert_frame_equal(df_embedding_weights, expected_df_embedding_weights)
-        np_embedding_weights = self.model.get_embedding_weights(return_df=False, adapt_embeddings=True)
+        np_embedding_weights = self.model.get_embedding_weights(return_df=False)
         np.testing.assert_array_almost_equal(np_embedding_weights, self.expected_adapted_embedding_weights)
 
     def test_global_plot_embedding_histogram(self):
-        expected_data = EMBEDDING_WEIGHTS[0].flatten()
-        ArchitectureIndependentTests.test_global_plot_embedding_histogram(self.model, expected_data)
         expected_data = self.expected_adapted_embedding_weights.flatten()
-        ArchitectureIndependentTests.test_global_plot_embedding_histogram(self.model, expected_data,
-                                                                          adapt_embeddings=True)
+        ArchitectureIndependentTests.test_global_plot_embedding_histogram(self.model, expected_data)
 
     def test_global_explain_embedding_components(self):
-        ArchitectureIndependentTests.test_global_explain_embedding_components(self.model)
-        explained_adapted_components = self.model.global_explain_embedding_components(2, adapt_embeddings=True)
+        explained_adapted_components = self.model.global_explain_embedding_components(2)
         expected_explained_adapted_components = pd.DataFrame(np.array([["UNK", "world"], ["hello", "hello"]]),
                                                              index=pd.Index([1, 2], name="Word Rank"),
                                                              columns=pd.Index([0, 1], dtype=object))
@@ -274,6 +364,18 @@ class TestXSWEMAdaptFrozenEmbeddings(tf.test.TestCase):
 
     def test_frozen_embeddings(self):
         ArchitectureIndependentTests.test_frozen_embeddings(self.model)
+
+    def test_local_explain_most_salient_words(self):
+        shortlist = self.model.local_explain_most_salient_words(TEST_SENTENCE[0])
+        expected_shortlist = np.array(["hello", "world"])
+        np.testing.assert_array_equal(shortlist, expected_shortlist)
+
+    def test_local_explain_most_salient_words_by_index(self):
+        shortlist = self.model.local_explain_most_salient_words(TEST_SENTENCE[0], by_index=True)
+        expected_shortlist = pd.DataFrame(np.array([["hello", "world"]]),
+                                          index=pd.Index([1], name="Word Rank"),
+                                          columns=pd.Index([0, 1], dtype=object))
+        pd.testing.assert_frame_equal(shortlist, expected_shortlist)
 
 
 class TestXSWEMDropoutAdaptEmbeddings(tf.test.TestCase):

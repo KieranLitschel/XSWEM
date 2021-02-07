@@ -2,4 +2,5 @@ tensorflow>=2.0.0
 pandas
 numpy>=1.16.5
 seaborn
+matplotlib
 tqdm

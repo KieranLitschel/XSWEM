@@ -1,6 +1,7 @@
 import unittest
 from xswem.exceptions import XSWEMException, UnbuiltLayersException, UnexpectedEmbeddingSizeException, \
-    _DEFAULT_UNBUILT_LAYERS_EXCEPTION_MESSAGE, _DEFAULT_UNEXPECTED_EMBEDDING_SIZE_EXCEPTION_MESSAGE
+    WordMissingFromVocabMapException, _DEFAULT_UNBUILT_LAYERS_EXCEPTION_MESSAGE, \
+    _DEFAULT_UNEXPECTED_EMBEDDING_SIZE_EXCEPTION_MESSAGE, _DEFAULT_WORD_MISSING_FROM_VOCAB_MAP_EXCEPTION_MESSAGE
 
 
 class TestExceptions(unittest.TestCase):
@@ -25,6 +26,14 @@ class TestExceptions(unittest.TestCase):
         test_message = "{0}{1}{2}"
         exception = UnexpectedEmbeddingSizeException(*test_args, message=test_message)
         self.assertEqual(str(exception), test_message.format(*test_args))
+
+    def test_WordMissingFromVocabMapException(self):
+        missing_word = 1
+        exception = WordMissingFromVocabMapException(missing_word)
+        self.assertEqual(str(exception), _DEFAULT_WORD_MISSING_FROM_VOCAB_MAP_EXCEPTION_MESSAGE.format(missing_word))
+        test_message = "{0}"
+        exception = WordMissingFromVocabMapException(missing_word, message=test_message)
+        self.assertEqual(str(exception), test_message.format(missing_word))
 
 
 if __name__ == '__main__':
