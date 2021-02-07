@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 REQUIRED_PCKGS = [
     "tensorflow>=2.0.0",
-    "datasets",
     "pandas",
     "numpy>=1.16.5",
     "seaborn",
+    "matplotlib",
     "tqdm"
 ]
 
