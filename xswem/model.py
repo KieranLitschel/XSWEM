@@ -225,7 +225,7 @@ class XSWEM(tf.keras.Model):
         n = n or 5
         return self._embedding_components_top_n_words(n)
 
-    def local_explain_word_shortlist(self, pre_processed_input_sentence, by_index=None):
+    def local_explain_most_salient_words(self, pre_processed_input_sentence, by_index=None):
         """ Gets the embeddings of the words in the input_sentence and finds the word corresponding to the maximum value
             for each component (effectively the argmax of each component). This is equivalent to the output of the max
             pooling layer, except instead of the output being the maximum value for each component we have the word that
@@ -251,7 +251,7 @@ class XSWEM(tf.keras.Model):
                 argmax for at least one component.
         """
         unique_input_sentence = np.unique(pre_processed_input_sentence)
-        word_shortlist = self._embedding_components_top_n_words(n=1, vocab_nums=unique_input_sentence)
+        most_salient_words = self._embedding_components_top_n_words(n=1, vocab_nums=unique_input_sentence)
         if not by_index:
-            word_shortlist = np.sort(np.unique(word_shortlist.values))
-        return word_shortlist
+            most_salient_words = np.sort(np.unique(most_salient_words.values))
+        return most_salient_words

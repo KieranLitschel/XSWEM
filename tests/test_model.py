@@ -158,13 +158,13 @@ class TestXSWEMBasic(tf.test.TestCase):
     def test_unfrozen_embeddings(self):
         ArchitectureIndependentTests.test_unfrozen_embeddings(self.model)
 
-    def test_local_explain_shortlist(self):
-        shortlist = self.model.local_explain_word_shortlist(TEST_SENTENCE[0])
+    def test_local_explain_most_salient_words(self):
+        shortlist = self.model.local_explain_most_salient_words(TEST_SENTENCE[0])
         expected_shortlist = np.array(["hello", "world"])
         np.testing.assert_array_equal(shortlist, expected_shortlist)
 
-    def test_local_explain_shortlist_by_index(self):
-        shortlist = self.model.local_explain_word_shortlist(TEST_SENTENCE[0], by_index=True)
+    def test_local_explain_most_salient_words_by_index(self):
+        shortlist = self.model.local_explain_most_salient_words(TEST_SENTENCE[0], by_index=True)
         expected_shortlist = pd.DataFrame(np.array([["world", "hello"]]),
                                           index=pd.Index([1], name="Word Rank"),
                                           columns=pd.Index([0, 1], dtype=object))
@@ -186,13 +186,13 @@ class TestXSWEMMaskZero(tf.test.TestCase):
         expected_embedding_weights = MASK_ZERO_EMBEDDING_WEIGHTS[0][[2, 3]]
         np.testing.assert_array_equal(embedding_weights, expected_embedding_weights)
 
-    def test_local_explain_shortlist(self):
-        shortlist = self.model.local_explain_word_shortlist(MASK_ZERO_TEST_SENTENCE[0])
+    def test_local_explain_most_salient_words(self):
+        shortlist = self.model.local_explain_most_salient_words(MASK_ZERO_TEST_SENTENCE[0])
         expected_shortlist = np.array(["hello", "world"])
         np.testing.assert_array_equal(shortlist, expected_shortlist)
 
-    def test_local_explain_shortlist_by_index(self):
-        shortlist = self.model.local_explain_word_shortlist(MASK_ZERO_TEST_SENTENCE[0], by_index=True)
+    def test_local_explain_most_salient_words_by_index(self):
+        shortlist = self.model.local_explain_most_salient_words(MASK_ZERO_TEST_SENTENCE[0], by_index=True)
         expected_shortlist = pd.DataFrame(np.array([["world", "hello"]]),
                                           index=pd.Index([1], name="Word Rank"),
                                           columns=pd.Index([0, 1], dtype=object))
@@ -365,13 +365,13 @@ class TestXSWEMAdaptFrozenEmbeddings(tf.test.TestCase):
     def test_frozen_embeddings(self):
         ArchitectureIndependentTests.test_frozen_embeddings(self.model)
 
-    def test_local_explain_shortlist(self):
-        shortlist = self.model.local_explain_word_shortlist(TEST_SENTENCE[0])
+    def test_local_explain_most_salient_words(self):
+        shortlist = self.model.local_explain_most_salient_words(TEST_SENTENCE[0])
         expected_shortlist = np.array(["hello", "world"])
         np.testing.assert_array_equal(shortlist, expected_shortlist)
 
-    def test_local_explain_shortlist_by_index(self):
-        shortlist = self.model.local_explain_word_shortlist(TEST_SENTENCE[0], by_index=True)
+    def test_local_explain_most_salient_words_by_index(self):
+        shortlist = self.model.local_explain_most_salient_words(TEST_SENTENCE[0], by_index=True)
         expected_shortlist = pd.DataFrame(np.array([["hello", "world"]]),
                                           index=pd.Index([1], name="Word Rank"),
                                           columns=pd.Index([0, 1], dtype=object))
