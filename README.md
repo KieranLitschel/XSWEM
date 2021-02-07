@@ -20,7 +20,7 @@ We are currently implementing some methods we have developed for local explanati
 
 So far we have only implemented the local_explain_most_salient_words method. This method extracts the words the model has learnt as most salient from a given input sentence. Below we show an example of this method using a sample from the [ag_news](https://huggingface.co/datasets/viewer/?dataset=ag_news) dataset. This method is explained in more detail in the [local_explain_most_salient_words.ipynb](https://github.com/KieranLitschel/XSWEM/blob/main/notebooks/local_explain_most_salient_words.ipynb) notebook.
 
-![local_explain_most_salient_words.png](https://github.com/KieranLitschel/XSWEM/blob/main/resources/images/local_explain_most_salient_words.png)
+![](https://raw.githubusercontent.com/KieranLitschel/XSWEM/main/resources/images/local_explain_most_salient_words.png)
 
 ## Global Explanations
 
