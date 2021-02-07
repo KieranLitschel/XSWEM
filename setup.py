@@ -3,14 +3,8 @@ import setuptools
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-REQUIRED_PCKGS = [
-    "tensorflow>=2.0.0",
-    "pandas",
-    "numpy>=1.16.5",
-    "seaborn",
-    "matplotlib",
-    "tqdm"
-]
+with open("requirements.txt", "r", encoding="utf-8") as fh:
+    REQUIRED_PCKGS = fh.read().replace("\r\n", "\n").split("\n")
 
 setuptools.setup(
     name="xswem",
