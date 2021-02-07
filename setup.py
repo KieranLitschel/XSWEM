@@ -14,7 +14,7 @@ REQUIRED_PCKGS = [
 
 setuptools.setup(
     name="xswem",
-    version="0.1.1",
+    version="1.0.0",
     author="Kieran Litschel",
     author_email="kieran.litschel@outlook.com",
     description="A simple and explainable deep learning model for NLP.",
